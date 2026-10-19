@@ -108,6 +108,42 @@ Get-ChildItem "F:/哨兵2号-L2A/processed" -Recurse -Filter "calibrated_cloudma
 
 每景日志位于 `<output_root>/logs/`。单景失败不会中断其它景；处理清单会分别列出 `success` 和 `failed`。
 
+## 独立批量处理多个 SAFE 产品
+
+`batch_sentinel_l2a.py` 是独立的批量入口。它会递归查找批量根目录下所有**直接包含 `GRANULE` 的 `.SAFE` 目录**，因而可以正确处理 `SAFE/SAFE/GRANULE` 的双层解压结构；不会把外层和内层 SAFE 重复处理。每景仍调用与单景完全相同的重采样、合成、标定和 SCL 去云流程，按顺序运行以避免同时处理多景造成内存或磁盘空间不足。
+
+### 批量运行前的配置
+
+`batch_sentinel_l2a.py` 默认读取同目录的 `config.json`，其中的 `input_paths` 会被命令行 `--input-root` 覆盖。请保留波段、`band_source_resolution`、NoData 等处理参数。若批次包含不同 UTM 分区或南北半球的影像，请将：
+
+```json
+"source_crs_fallback": "AUTO"
+```
+
+不要为跨区域批次固定写成 `EPSG:32650`；脚本会优先读取每景 `MTD_TL.xml`，必要时再从每景 MGRS 瓦片编号恢复坐标系。
+
+### 批量运行命令
+
+先进入脚本目录：
+
+```powershell
+Set-Location "C:\Users\user\Documents\Codex\2026-10-16\2-envi-1-envi-file-open-2\Automated Processing of Sentinel-2 Data"
+```
+
+例如所有下载产品均放在 `F:/Sentinel2/L2A_batch` 下，成果放在短路径 `F:/S2OUT`：
+
+```powershell
+py .\batch_sentinel_l2a.py --input-root "F:/Sentinel2/L2A_batch" --output-root "F:/S2OUT" --config .\config.json --verbose
+```
+
+中途中断后，如不希望重写已完成成果，可增加 `--skip-existing`：
+
+```powershell
+py .\batch_sentinel_l2a.py --input-root "F:/Sentinel2/L2A_batch" --output-root "F:/S2OUT" --config .\config.json --skip-existing --verbose
+```
+
+批量清单写入 `F:/S2OUT/batch_processing_manifest.json`，日志写入 `F:/S2OUT/logs/batch_sentinel_l2a.log`。`success`、`skipped` 和 `failed` 三个字段分别记录完成、跳过和失败的景；单景失败不会停止其余产品。
+
 ## 输出与可追溯性
 
 每景输出目录按以下顺序命名；文件名均带有景标识、波段和处理后缀。
